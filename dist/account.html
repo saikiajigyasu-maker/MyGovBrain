@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Sign in or create a Softcore account.">
+    <title>Account access | Softcore</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,500;9..144,600&display=swap" rel="stylesheet">
+  <script type="module" crossorigin src="/assets/site-BiacoWLk.js"></script>
+  <link rel="stylesheet" crossorigin href="/assets/site-Bp5fGZAl.css">
+</head>
+<body class="softcore">
+    <a class="skip-link" href="#main-content">Skip to content</a>
+    <header class="navbar_container">
+        <a class="brand" href="index.html" aria-label="Softcore home"><span class="brand-mark">S</span><span class="heading">softcore</span></a>
+        <nav class="nav" id="site-navigation" aria-label="Main navigation">
+            <a href="index.html" class="nav-link">Home</a>
+            <a href="information.html" class="nav-link">Our approach</a>
+            <a href="download.html" class="nav-link">Download</a>
+            <a href="account.html" class="nav-link nav-account active" aria-current="page">Access</a>
+        </nav>
+    </header>
+    <main class="page-width account-layout" id="main-content">
+        <section class="account-intro">
+            <p class="eyebrow"><span class="status-dot"></span> SOFTCORE ACCOUNT</p>
+            <h1>Your workspace, in one place.</h1>
+            <p>Sign in to your account or create one to get started.</p>
+            <div class="account-note"><span aria-hidden="true">&#9432;</span><p>Account access is for the Softcore development service. This page does not scan or upload files.</p></div>
+        </section>
+        <section class="account-form-wrap" id="auth-panel" aria-label="Account sign in and registration">
+            <div class="auth-tabs" role="tablist" aria-label="Choose account action">
+                <button class="auth-tab active" id="login-tab" type="button" role="tab" aria-selected="true" aria-controls="login-form" tabindex="0" data-auth-mode="login">Sign in</button>
+                <button class="auth-tab" id="signup-tab" type="button" role="tab" aria-selected="false" aria-controls="signup-form" tabindex="-1" data-auth-mode="signup">Create account</button>
+            </div>
+            <form class="auth-form" id="login-form" role="tabpanel" aria-labelledby="login-tab" data-auth-form="login">
+                <p class="eyebrow">WELCOME BACK</p>
+                <h2>Sign in</h2>
+                <label for="login-email">Email address</label>
+                <input id="login-email" name="email" type="email" autocomplete="email" required>
+                <label for="login-password">Password</label>
+                <input id="login-password" name="password" type="password" autocomplete="current-password" required>
+                <button class="button button-primary auth-submit" type="submit">Sign in</button>
+                <p class="form-message" data-form-message="login" role="status" aria-live="polite"></p>
+                <p class="auth-switch-copy">New to Softcore? <button class="inline-button" type="button" data-switch-mode="signup">Create an account</button></p>
+            </form>
+            <form class="auth-form" id="signup-form" role="tabpanel" aria-labelledby="signup-tab" data-auth-form="signup" hidden>
+                <p class="eyebrow">GET STARTED</p>
+                <h2>Create account</h2>
+                <label for="signup-name">Name</label>
+                <input id="signup-name" name="name" type="text" autocomplete="name" maxlength="100" required>
+                <label for="signup-email">Email address</label>
+                <input id="signup-email" name="email" type="email" autocomplete="email" maxlength="254" required>
+                <label for="signup-password">Password</label>
+                <input id="signup-password" name="password" type="password" autocomplete="new-password" minlength="8" required>
+                <button class="button button-primary auth-submit" type="submit">Create account</button>
+                <p class="form-message" data-form-message="signup" role="status" aria-live="polite"></p>
+                <p class="auth-switch-copy">Already registered? <button class="inline-button" type="button" data-switch-mode="login">Sign in</button></p>
+            </form>
+            <section class="auth-signed-in" data-auth-signed-in hidden>
+                <p class="eyebrow">ACCOUNT</p>
+                <h2>You're signed in.</h2>
+                <p data-user-details></p>
+                <button class="button button-outline" type="button" data-auth-logout>Sign out</button>
+                <p class="form-message" data-auth-session-message role="status" aria-live="polite"></p>
+            </section>
+            <p class="auth-footnote">Your password is protected and never shown on this page.</p>
+        </section>
+    </main>
+    <footer class="site-footer page-width"><a class="footer-brand" href="index.html">softcore<span class="footer-period">.</span></a><span>Independent security software in development.</span><a href="information.html">Our approach</a><a href="download.html">Release status</a></footer>
+</body>
+</html>
