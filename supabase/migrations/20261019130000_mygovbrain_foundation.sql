@@ -328,6 +328,7 @@ create table public.schemes (
     slug text not null unique check (slug ~ '^[a-z0-9]+(-[a-z0-9]+)*$'),
     state_id uuid references public.states(id) on delete restrict,
     department_id uuid references public.departments(id) on delete set null,
+    official_source_id uuid not null references public.official_sources(id) on delete restrict,
     status text not null default 'draft' check (status in ('draft', 'published', 'archived')),
     published_at timestamptz,
     created_by uuid references auth.users(id) on delete set null,
@@ -341,7 +342,7 @@ create table public.jobs (
     slug text not null unique check (slug ~ '^[a-z0-9]+(-[a-z0-9]+)*$'),
     state_id uuid references public.states(id) on delete restrict,
     department_id uuid references public.departments(id) on delete set null,
-    official_source_id uuid references public.official_sources(id) on delete restrict,
+    official_source_id uuid not null references public.official_sources(id) on delete restrict,
     status text not null default 'draft' check (status in ('draft', 'published', 'archived')),
     published_at timestamptz,
     closes_at timestamptz,
@@ -356,7 +357,7 @@ create table public.scholarships (
     slug text not null unique check (slug ~ '^[a-z0-9]+(-[a-z0-9]+)*$'),
     state_id uuid references public.states(id) on delete restrict,
     department_id uuid references public.departments(id) on delete set null,
-    official_source_id uuid references public.official_sources(id) on delete restrict,
+    official_source_id uuid not null references public.official_sources(id) on delete restrict,
     status text not null default 'draft' check (status in ('draft', 'published', 'archived')),
     published_at timestamptz,
     closes_at timestamptz,
@@ -366,12 +367,59 @@ create table public.scholarships (
     check (status <> 'published' or published_at is not null)
 );
 
-create table public.saved_opportunities (
-    user_id uuid not null references auth.users(id) on delete cascade,
-    opportunity_type text not null check (opportunity_type in ('job', 'scholarship', 'scheme')),
-    opportunity_id uuid not null,
+create table public.scheme_translations (
+    id uuid primary key default gen_random_uuid(),
+    scheme_id uuid not null references public.schemes(id) on delete cascade,
+    language_code text not null references public.languages(code) on delete restrict,
+    title text not null check (length(trim(title)) between 1 and 240),
+    summary text not null default '',
+    details text not null default '',
+    status text not null default 'draft' check (status in ('draft', 'published', 'archived')),
+    published_at timestamptz,
     created_at timestamptz not null default now(),
-    primary key (user_id, opportunity_type, opportunity_id)
+    updated_at timestamptz not null default now(),
+    unique (scheme_id, language_code),
+    check (status <> 'published' or published_at is not null)
+);
+
+create table public.job_translations (
+    id uuid primary key default gen_random_uuid(),
+    job_id uuid not null references public.jobs(id) on delete cascade,
+    language_code text not null references public.languages(code) on delete restrict,
+    title text not null check (length(trim(title)) between 1 and 240),
+    summary text not null default '',
+    details text not null default '',
+    status text not null default 'draft' check (status in ('draft', 'published', 'archived')),
+    published_at timestamptz,
+    created_at timestamptz not null default now(),
+    updated_at timestamptz not null default now(),
+    unique (job_id, language_code),
+    check (status <> 'published' or published_at is not null)
+);
+
+create table public.scholarship_translations (
+    id uuid primary key default gen_random_uuid(),
+    scholarship_id uuid not null references public.scholarships(id) on delete cascade,
+    language_code text not null references public.languages(code) on delete restrict,
+    title text not null check (length(trim(title)) between 1 and 240),
+    summary text not null default '',
+    details text not null default '',
+    status text not null default 'draft' check (status in ('draft', 'published', 'archived')),
+    published_at timestamptz,
+    created_at timestamptz not null default now(),
+    updated_at timestamptz not null default now(),
+    unique (scholarship_id, language_code),
+    check (status <> 'published' or published_at is not null)
+);
+
+create table public.saved_opportunities (
+    id uuid primary key default gen_random_uuid(),
+    user_id uuid not null references auth.users(id) on delete cascade,
+    job_id uuid references public.jobs(id) on delete cascade,
+    scholarship_id uuid references public.scholarships(id) on delete cascade,
+    scheme_id uuid references public.schemes(id) on delete cascade,
+    created_at timestamptz not null default now(),
+    check (num_nonnulls(job_id, scholarship_id, scheme_id) = 1)
 );
 
 create table public.service_leads (
@@ -431,6 +479,9 @@ create table public.approved_analytics_events (
 create index districts_state_idx on public.districts(state_id);
 create index services_public_idx on public.services(status, state_id, category_id) where status = 'published';
 create index service_translations_public_idx on public.service_translations(service_id, language_code) where status = 'published';
+create index scheme_translations_public_idx on public.scheme_translations(scheme_id, language_code) where status = 'published';
+create index job_translations_public_idx on public.job_translations(job_id, language_code) where status = 'published';
+create index scholarship_translations_public_idx on public.scholarship_translations(scholarship_id, language_code) where status = 'published';
 create index official_sources_public_idx on public.official_sources(service_id) where is_public and verification_status = 'approved';
 create index eligibility_rules_service_idx on public.eligibility_rules(service_id, applicable_state_id);
 create index centers_verified_lookup_idx on public.centers(state_id, district_id) where verification_status = 'verified';
@@ -445,6 +496,9 @@ create index user_documents_owner_idx on public.user_documents(owner_user_id, cr
 create index notifications_user_idx on public.notifications(user_id, created_at desc);
 create index jobs_public_idx on public.jobs(status, state_id, closes_at) where status = 'published';
 create index scholarships_public_idx on public.scholarships(status, state_id, closes_at) where status = 'published';
+create unique index saved_opportunities_job_unique on public.saved_opportunities(user_id, job_id) where job_id is not null;
+create unique index saved_opportunities_scholarship_unique on public.saved_opportunities(user_id, scholarship_id) where scholarship_id is not null;
+create unique index saved_opportunities_scheme_unique on public.saved_opportunities(user_id, scheme_id) where scheme_id is not null;
 create index service_leads_owner_idx on public.service_leads(owner_user_id, created_at desc);
 create index lead_assignments_user_idx on public.lead_assignments(assigned_user_id, lead_id);
 create index admin_audit_logs_created_idx on public.admin_audit_logs(created_at desc);
@@ -665,10 +719,41 @@ begin
 end;
 $$;
 
+create or replace function public.record_admin_change()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+    target_id text;
+begin
+    if tg_op = 'DELETE' then
+        target_id := old.id::text;
+    else
+        target_id := new.id::text;
+    end if;
+
+    insert into public.admin_audit_logs (actor_user_id, action, target_type, target_id)
+    values (
+        (select auth.uid()),
+        lower(tg_table_name) || '_' || lower(tg_op),
+        tg_table_name,
+        target_id
+    );
+
+    if tg_op = 'DELETE' then
+        return old;
+    end if;
+    return new;
+end;
+$$;
+
 revoke all on function public.set_user_role(uuid, text, boolean) from public, anon;
 revoke all on function public.record_application_status_change() from public, anon, authenticated;
 revoke all on function public.record_lead_status_change() from public, anon, authenticated;
 revoke all on function public.record_center_review() from public, anon, authenticated;
+revoke all on function public.record_admin_change() from public, anon, authenticated;
 grant execute on function public.set_user_role(uuid, text, boolean) to authenticated;
 
 create trigger application_status_audit
@@ -680,6 +765,60 @@ create trigger lead_status_audit
 create trigger center_review_audit
     after insert on public.center_reviews
     for each row execute function public.record_center_review();
+create trigger service_content_audit
+    after insert or update or delete on public.services
+    for each row execute function public.record_admin_change();
+create trigger service_translation_audit
+    after insert or update or delete on public.service_translations
+    for each row execute function public.record_admin_change();
+create trigger scheme_translation_audit
+    after insert or update or delete on public.scheme_translations
+    for each row execute function public.record_admin_change();
+create trigger job_translation_audit
+    after insert or update or delete on public.job_translations
+    for each row execute function public.record_admin_change();
+create trigger scholarship_translation_audit
+    after insert or update or delete on public.scholarship_translations
+    for each row execute function public.record_admin_change();
+create trigger official_source_audit
+    after insert or update or delete on public.official_sources
+    for each row execute function public.record_admin_change();
+create trigger center_record_audit
+    after insert or update or delete on public.centers
+    for each row execute function public.record_admin_change();
+create trigger center_membership_audit
+    after insert or update or delete on public.center_memberships
+    for each row execute function public.record_admin_change();
+create trigger center_submission_audit
+    after insert or update or delete on public.center_submissions
+    for each row execute function public.record_admin_change();
+create trigger service_catalog_aux_audit
+    after insert or update or delete on public.departments
+    for each row execute function public.record_admin_change();
+create trigger service_category_audit
+    after insert or update or delete on public.service_categories
+    for each row execute function public.record_admin_change();
+create trigger service_document_audit
+    after insert or update or delete on public.service_documents
+    for each row execute function public.record_admin_change();
+create trigger eligibility_question_audit
+    after insert or update or delete on public.eligibility_questions
+    for each row execute function public.record_admin_change();
+create trigger eligibility_option_audit
+    after insert or update or delete on public.eligibility_options
+    for each row execute function public.record_admin_change();
+create trigger eligibility_rule_audit
+    after insert or update or delete on public.eligibility_rules
+    for each row execute function public.record_admin_change();
+create trigger job_record_audit
+    after insert or update or delete on public.jobs
+    for each row execute function public.record_admin_change();
+create trigger scholarship_record_audit
+    after insert or update or delete on public.scholarships
+    for each row execute function public.record_admin_change();
+create trigger scheme_record_audit
+    after insert or update or delete on public.schemes
+    for each row execute function public.record_admin_change();
 
 insert into public.user_role_assignments (user_id, role)
 select id, 'citizen'
@@ -706,6 +845,7 @@ revoke all on all tables in schema public from anon, authenticated;
 grant select on public.languages, public.states, public.districts, public.departments,
     public.service_categories, public.services, public.service_translations,
     public.document_types, public.official_sources, public.service_documents,
+    public.scheme_translations, public.job_translations, public.scholarship_translations,
     public.eligibility_questions, public.eligibility_options, public.eligibility_rules,
     public.user_role_assignments, public.centers, public.center_memberships,
     public.center_services, public.center_submissions, public.center_reviews,
@@ -719,10 +859,12 @@ grant select on public.languages, public.states, public.districts, public.depart
     public.approved_analytics_events to authenticated;
 
 grant select on public.services, public.service_translations, public.official_sources,
-    public.centers, public.jobs, public.scholarships, public.schemes to anon;
+    public.centers, public.jobs, public.job_translations, public.scholarships,
+    public.scholarship_translations, public.schemes, public.scheme_translations to anon;
 grant select on public.profiles to authenticated;
 grant update (display_name) on public.profiles to authenticated;
 grant insert, update, delete on public.services, public.service_translations,
+    public.scheme_translations, public.job_translations, public.scholarship_translations,
     public.official_sources, public.departments, public.service_categories,
     public.service_documents, public.eligibility_questions, public.eligibility_options,
     public.eligibility_rules, public.document_types, public.jobs, public.scholarships,
@@ -753,9 +895,58 @@ create policy "Services are admin managed"
     using (public.has_app_role('administrator') or public.has_app_role('super_administrator'))
     with check (public.has_app_role('administrator') or public.has_app_role('super_administrator'));
 create policy "Published translations are public"
-    on public.service_translations for select to anon, authenticated using (status = 'published');
+    on public.service_translations for select to anon, authenticated
+    using (
+        status = 'published'
+        and exists (select 1 from public.services s where s.id = service_id and s.status = 'published')
+    );
 create policy "Translations are admin managed"
     on public.service_translations for all to authenticated
+    using (public.has_app_role('administrator') or public.has_app_role('super_administrator'))
+    with check (public.has_app_role('administrator') or public.has_app_role('super_administrator'));
+create policy "Published scheme translations are public"
+    on public.scheme_translations for select to anon, authenticated
+    using (
+        status = 'published'
+        and exists (
+            select 1 from public.schemes s
+            join public.official_sources src on src.id = s.official_source_id
+            where s.id = scheme_id and s.status = 'published'
+              and src.is_public and src.verification_status = 'approved' and src.verified_at is not null
+        )
+    );
+create policy "Scheme translations are admin managed"
+    on public.scheme_translations for all to authenticated
+    using (public.has_app_role('administrator') or public.has_app_role('super_administrator'))
+    with check (public.has_app_role('administrator') or public.has_app_role('super_administrator'));
+create policy "Published job translations are public"
+    on public.job_translations for select to anon, authenticated
+    using (
+        status = 'published'
+        and exists (
+            select 1 from public.jobs j
+            join public.official_sources src on src.id = j.official_source_id
+            where j.id = job_id and j.status = 'published'
+              and src.is_public and src.verification_status = 'approved' and src.verified_at is not null
+        )
+    );
+create policy "Job translations are admin managed"
+    on public.job_translations for all to authenticated
+    using (public.has_app_role('administrator') or public.has_app_role('super_administrator'))
+    with check (public.has_app_role('administrator') or public.has_app_role('super_administrator'));
+create policy "Published scholarship translations are public"
+    on public.scholarship_translations for select to anon, authenticated
+    using (
+        status = 'published'
+        and exists (
+            select 1 from public.scholarships s
+            join public.official_sources src on src.id = s.official_source_id
+            where s.id = scholarship_id and s.status = 'published'
+              and src.is_public and src.verification_status = 'approved' and src.verified_at is not null
+        )
+    );
+create policy "Scholarship translations are admin managed"
+    on public.scholarship_translations for all to authenticated
     using (public.has_app_role('administrator') or public.has_app_role('super_administrator'))
     with check (public.has_app_role('administrator') or public.has_app_role('super_administrator'));
 create policy "Approved public sources are readable"
@@ -773,19 +964,43 @@ create policy "Centers are admin managed"
     using (public.has_app_role('administrator') or public.has_app_role('super_administrator'))
     with check (public.has_app_role('administrator') or public.has_app_role('super_administrator'));
 create policy "Published jobs are public"
-    on public.jobs for select to anon, authenticated using (status = 'published');
+    on public.jobs for select to anon, authenticated
+    using (
+        status = 'published'
+        and exists (
+            select 1 from public.official_sources src
+            where src.id = official_source_id and src.is_public
+              and src.verification_status = 'approved' and src.verified_at is not null
+        )
+    );
 create policy "Jobs are admin managed"
     on public.jobs for all to authenticated
     using (public.has_app_role('administrator') or public.has_app_role('super_administrator'))
     with check (public.has_app_role('administrator') or public.has_app_role('super_administrator'));
 create policy "Published scholarships are public"
-    on public.scholarships for select to anon, authenticated using (status = 'published');
+    on public.scholarships for select to anon, authenticated
+    using (
+        status = 'published'
+        and exists (
+            select 1 from public.official_sources src
+            where src.id = official_source_id and src.is_public
+              and src.verification_status = 'approved' and src.verified_at is not null
+        )
+    );
 create policy "Scholarships are admin managed"
     on public.scholarships for all to authenticated
     using (public.has_app_role('administrator') or public.has_app_role('super_administrator'))
     with check (public.has_app_role('administrator') or public.has_app_role('super_administrator'));
 create policy "Published schemes are public"
-    on public.schemes for select to anon, authenticated using (status = 'published');
+    on public.schemes for select to anon, authenticated
+    using (
+        status = 'published'
+        and exists (
+            select 1 from public.official_sources src
+            where src.id = official_source_id and src.is_public
+              and src.verification_status = 'approved' and src.verified_at is not null
+        )
+    );
 create policy "Schemes are admin managed"
     on public.schemes for all to authenticated
     using (public.has_app_role('administrator') or public.has_app_role('super_administrator'))
@@ -959,10 +1174,24 @@ values (
     10485760,
     array['application/pdf', 'image/jpeg', 'image/png']
 )
-on conflict (id) do update
-set public = false,
-    file_size_limit = excluded.file_size_limit,
-    allowed_mime_types = excluded.allowed_mime_types;
+on conflict (id) do nothing;
+
+do $$
+begin
+    if exists (
+        select 1
+        from storage.buckets
+        where id = 'private-user-documents'
+          and (
+              public
+              or file_size_limit <> 10485760
+              or allowed_mime_types is distinct from array['application/pdf', 'image/jpeg', 'image/png']
+          )
+    ) then
+        raise exception 'The existing private-user-documents bucket has incompatible settings';
+    end if;
+end;
+$$;
 
 create policy "Owners read private documents"
     on storage.objects for select to authenticated

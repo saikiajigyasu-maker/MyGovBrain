@@ -4,10 +4,12 @@ import { useEffect, useState } from 'react';
 
 export default function AuthForm({ next }) {
     const [email, setEmail] = useState('');
+    const [token, setToken] = useState('');
     const [busy, setBusy] = useState(false);
     const [message, setMessage] = useState('');
     const [error, setError] = useState('');
     const [authenticated, setAuthenticated] = useState(false);
+    const [emailSent, setEmailSent] = useState(false);
 
     useEffect(() => {
         let active = true;
@@ -43,8 +45,29 @@ export default function AuthForm({ next }) {
             const result = await response.json();
             if (!response.ok) throw new Error(result.error || 'Could not send a sign-in link.');
             setMessage(result.message);
+            setEmailSent(true);
         } catch {
             setError('We could not send the link. Check your connection and try again.');
+        } finally {
+            setBusy(false);
+        }
+    }
+
+    async function verifyCode(event) {
+        event.preventDefault();
+        setBusy(true);
+        setError('');
+
+        try {
+            const response = await fetch('/api/auth/verify', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, token })
+            });
+            if (!response.ok) throw new Error('Could not verify the sign-in code.');
+            window.location.assign(next);
+        } catch {
+            setError('That code could not be verified. Check it and try again, or request a new code.');
         } finally {
             setBusy(false);
         }
@@ -74,29 +97,52 @@ export default function AuthForm({ next }) {
                         {busy ? 'Please wait...' : 'Sign out'}
                     </button>
                 </div>
+            ) : emailSent ? (
+                <form className="auth-form" onSubmit={verifyCode}>
+                    <p role="status">{message}</p>
+                    <label htmlFor="auth-token">Six-digit email code</label>
+                    <input
+                        id="auth-token"
+                        name="token"
+                        type="text"
+                        inputMode="numeric"
+                        autoComplete="one-time-code"
+                        pattern="[0-9]{6}"
+                        minLength={6}
+                        maxLength={6}
+                        value={token}
+                        onChange={(event) => setToken(event.target.value.replace(/\D/g, '').slice(0, 6))}
+                        required
+                    />
+                    <button className="button button-primary auth-submit" type="submit" disabled={busy}>
+                        {busy ? 'Checking...' : 'Verify code'}
+                    </button>
+                    <button className="inline-button" type="button" onClick={sendLink} disabled={busy}>
+                        Resend code
+                    </button>
+                </form>
             ) : (
                 <form className="auth-form" onSubmit={sendLink}>
-                <label htmlFor="auth-email">Email address</label>
-                <input
-                    id="auth-email"
-                    name="email"
-                    type="email"
-                    autoComplete="email"
-                    maxLength={254}
-                    value={email}
-                    onChange={(event) => setEmail(event.target.value)}
-                    required
-                />
-                <button className="button button-primary auth-submit" type="submit" disabled={busy}>
-                    {busy ? 'Sending...' : 'Send sign-in link'}
-                </button>
-                <p className="form-message" role="status" aria-live="polite">{message}</p>
-                <p className="form-message" role="alert">{error}</p>
-                {message && (
-                    <button className="inline-button" type="button" disabled={busy} onClick={sendLink}>
-                        Resend email
+                    <label htmlFor="auth-email">Email address</label>
+                    <input
+                        id="auth-email"
+                        name="email"
+                        type="email"
+                        autoComplete="email"
+                        maxLength={254}
+                        value={email}
+                        onChange={(event) => setEmail(event.target.value)}
+                        required
+                    />
+                    <button className="button button-primary auth-submit" type="submit" disabled={busy}>
+                        {busy ? 'Sending...' : 'Send sign-in link'}
                     </button>
-                )}
+                    <p className="form-message" role="status" aria-live="polite">{message}</p>
+                    {message && (
+                        <button className="inline-button" type="button" disabled={busy} onClick={sendLink}>
+                            Resend email
+                        </button>
+                    )}
                 </form>
             )}
             <p className="form-message" role="alert">{error}</p>

@@ -13,6 +13,11 @@ import {
     MAX_DOCUMENT_BYTES,
     validateDocumentFile
 } from '../lib/documents/validation.js';
+import {
+    createSignedUrlForOwnedDocument,
+    deleteOwnedDocumentRecordAndObject,
+    SIGNED_URL_TTL_SECONDS
+} from '../lib/documents/signed-url-access.js';
 
 const fakeFile = (size, type, bytes) => ({
     size,
@@ -117,4 +122,101 @@ test('document validation rejects bad signatures, oversized, empty, and unapprov
     assert.equal(await validateDocumentFile(fakeFile(0, 'image/png', [0x89, 0x50, 0x4e, 0x47])), false);
     assert.equal(await validateDocumentFile(fakeFile(100, 'application/pdf', [0x00, 0x00, 0x00, 0x00])), false);
     assert.equal(await validateDocumentFile(fakeFile(100, 'text/html', [0x3c, 0x68, 0x74, 0x6d, 0x6c])), false);
+});
+
+test('signed document links are owner-scoped and expire within one minute', async () => {
+    let queriedOwner;
+    let expiresIn;
+    const supabase = {
+        from: () => ({
+            select: () => ({
+                eq: (_column, value) => {
+                    if (!queriedOwner) queriedOwner = value;
+                    return {
+                        eq: (_ownerColumn, owner) => {
+                            queriedOwner = owner;
+                            return { maybeSingle: async () => ({ data: { storage_path: 'owner/random.pdf' }, error: null }) };
+                        }
+                    };
+                }
+            })
+        }),
+        storage: {
+            from: (bucket) => ({
+                createSignedUrl: async (_path, ttl) => {
+                    assert.equal(bucket, 'private-user-documents');
+                    expiresIn = ttl;
+                    return { data: { signedUrl: 'https://storage.invalid/signed' }, error: null };
+                }
+            })
+        }
+    };
+
+    const result = await createSignedUrlForOwnedDocument(
+        supabase,
+        'verified-user',
+        'a2b22e5b-1e1f-4a89-b30b-594f5f54bb39'
+    );
+    assert.equal(result, 'https://storage.invalid/signed');
+    assert.equal(queriedOwner, 'verified-user');
+    assert.equal(expiresIn, SIGNED_URL_TTL_SECONDS);
+    assert.ok(SIGNED_URL_TTL_SECONDS <= 60);
+});
+
+test('signed document links are not generated when owner-scoped metadata is absent', async () => {
+    let signedUrlRequested = false;
+    const supabase = {
+        from: () => ({
+            select: () => ({
+                eq: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null, error: null }) }) })
+            })
+        }),
+        storage: { from: () => ({ createSignedUrl: async () => { signedUrlRequested = true; } }) }
+    };
+
+    await assert.rejects(
+        createSignedUrlForOwnedDocument(supabase, 'verified-user', 'a2b22e5b-1e1f-4a89-b30b-594f5f54bb39'),
+        /access denied/
+    );
+    assert.equal(signedUrlRequested, false);
+});
+
+test('document cleanup removes only an owner-verified private object and metadata', async () => {
+    let removedPath;
+    let deletedOwner;
+    const supabase = {
+        from: () => ({
+            select: () => ({
+                eq: () => ({
+                    eq: (_column, owner) => ({
+                        maybeSingle: async () => ({ data: { storage_path: `${owner}/random.pdf` }, error: null })
+                    })
+                })
+            }),
+            delete: () => ({
+                eq: () => ({
+                    eq: async (_column, owner) => {
+                        deletedOwner = owner;
+                        return { error: null };
+                    }
+                })
+            })
+        }),
+        storage: {
+            from: () => ({
+                remove: async ([path]) => {
+                    removedPath = path;
+                    return { error: null };
+                }
+            })
+        }
+    };
+
+    await deleteOwnedDocumentRecordAndObject(
+        supabase,
+        'verified-user',
+        'a2b22e5b-1e1f-4a89-b30b-594f5f54bb39'
+    );
+    assert.equal(removedPath, 'verified-user/random.pdf');
+    assert.equal(deletedOwner, 'verified-user');
 });
